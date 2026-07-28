@@ -167,6 +167,43 @@ def blacklist_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
 
 
 @pytest.fixture
+def depth_chain_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+    """Site with a linear link chain: index -> level1 -> level2 -> level3."""
+    site = tmp_path / "depth-chain-site"
+    site.mkdir()
+    (site / "index.html").write_text(
+        '<html><body><a href="/level1.html">L1</a></body></html>', encoding="utf-8"
+    )
+    (site / "level1.html").write_text(
+        '<html><body><a href="/level2.html">L2</a></body></html>', encoding="utf-8"
+    )
+    (site / "level2.html").write_text(
+        '<html><body><a href="/level3.html">L3</a></body></html>', encoding="utf-8"
+    )
+    (site / "level3.html").write_text("<html><body>Leaf</body></html>", encoding="utf-8")
+
+    with serve_directory(site) as base_url:
+        yield base_url, site
+
+
+@pytest.fixture
+def multi_seed_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+    """Site with two disconnected sections, only reachable as separate seeds."""
+    site = tmp_path / "multi-seed-site"
+    (site / "docs").mkdir(parents=True)
+    (site / "blog").mkdir()
+    (site / "docs" / "index.html").write_text(
+        "<html><body>Docs home</body></html>", encoding="utf-8"
+    )
+    (site / "blog" / "index.html").write_text(
+        "<html><body>Blog home</body></html>", encoding="utf-8"
+    )
+
+    with serve_directory(site) as base_url:
+        yield base_url, site
+
+
+@pytest.fixture
 def conditional_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
     site = tmp_path / "conditional-site"
     site.mkdir()

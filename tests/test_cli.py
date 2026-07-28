@@ -6,6 +6,7 @@ from website_downloader.cli import (
     load_cookies,
     load_exclude_patterns,
     load_headers,
+    load_start_urls,
     parse_args,
     parse_cookie_header,
     parse_header,
@@ -74,3 +75,38 @@ def test_load_exclude_patterns_merges_files_and_cli(tmp_path) -> None:
         "*/forum/*",
         "*/drafts/*",
     ]
+
+
+def test_parse_args_collects_repeated_urls() -> None:
+    args = parse_args(["--url", "https://example.com/a", "--url", "https://example.com/b"])
+    assert args.url == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_load_start_urls_merges_file_and_dedupes(tmp_path) -> None:
+    url_file = tmp_path / "urls.txt"
+    url_file.write_text(
+        "# comment\nhttps://example.com/a\n\nhttps://example.com/c\n",
+        encoding="utf-8",
+    )
+    result = load_start_urls(["https://example.com/a", "https://example.com/b"], str(url_file))
+    assert result == [
+        "https://example.com/a",
+        "https://example.com/b",
+        "https://example.com/c",
+    ]
+
+
+def test_load_start_urls_raises_without_any_url() -> None:
+    with pytest.raises(ValueError):
+        load_start_urls([], None)
+
+
+def test_validate_args_rejects_negative_max_depth() -> None:
+    args = parse_args(["--url", "https://example.com", "--max-depth", "-1"])
+    with pytest.raises(ValueError):
+        validate_args(args)
+
+
+def test_validate_args_accepts_zero_max_depth() -> None:
+    args = parse_args(["--url", "https://example.com", "--max-depth", "0"])
+    validate_args(args)

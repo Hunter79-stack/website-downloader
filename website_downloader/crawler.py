@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
@@ -45,7 +45,9 @@ EXTENSIONLESS_ASSET_TAGS = {"script", "link", "img", "source", "video", "audio",
 class CrawlOptions:
     start_url: str
     root: Path
+    extra_start_urls: list[str] = field(default_factory=list)
     max_pages: int = 50
+    max_depth: int | None = None
     threads: int = 6
     page_threads: int = 1
     download_external_assets: bool = False
@@ -82,7 +84,7 @@ class CrawlStats:
 
 
 def crawl_site(options: CrawlOptions) -> CrawlStats:
-    q_pages: queue.Queue[str] = queue.Queue()
+    q_pages: queue.Queue[tuple[str, int]] = queue.Queue()
     start_url = canonicalize_url(options.start_url)
     seen_pages: set[str] = set()
     queued_pages: set[str] = set()
@@ -131,14 +133,16 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
     crawl_cache = CrawlCache.load(cache_path) if options.update else CrawlCache()
     stats = CrawlStats(pages_seen=0, assets_queued=0, elapsed_seconds=0.0)
 
-    def enqueue_page(url: str) -> None:
+    def enqueue_page(url: str, depth: int = 0) -> None:
+        if options.max_depth is not None and depth > options.max_depth:
+            return
         normalized = canonicalize_url(url, start_url)
         if is_blacklisted(normalized, options.exclude_patterns):
             log.debug("Excluded page (blacklist match): %s", normalized)
             return
         with page_lock:
             if normalized not in queued_pages and normalized not in seen_pages:
-                q_pages.put(normalized)
+                q_pages.put((normalized, depth))
                 queued_pages.add(normalized)
 
     def enqueue_asset(url: str, dest: Path) -> None:
@@ -153,6 +157,8 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
         download_q.put((abs_url, dest))
 
     enqueue_page(start_url)
+    for extra_url in options.extra_start_urls:
+        enqueue_page(canonicalize_url(extra_url))
     if options.update:
         # Saved pages contain rewritten local links, so a 304 page cannot be
         # re-discovered from its own HTML. Seed known pages from the cache.
@@ -224,7 +230,10 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
                 progress.page_seen(claimed, options.max_pages, page_url)
                 return True
 
-            def process_page(page_url: str) -> None:
+            def process_page(page_url: str, depth: int) -> None:
+                def enqueue_child_page(url: str) -> None:
+                    enqueue_page(url, depth + 1)
+
                 try:
                     local_path = to_local_path(urlparse(page_url), options.root)
                     result = fetch_html(
@@ -255,7 +264,7 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
                             page_url=page_url,
                             root=options.root,
                             root_netloc=root_netloc,
-                            enqueue_page=enqueue_page,
+                            enqueue_page=enqueue_child_page,
                             enqueue_asset=enqueue_asset,
                             options=options,
                         )
@@ -302,9 +311,9 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
             if page_threads == 1:
                 # Inline path keeps Playwright rendering on this thread.
                 while not q_pages.empty() and len(seen_pages) < options.max_pages:
-                    page_url = q_pages.get()
+                    page_url, depth = q_pages.get()
                     if claim_page(page_url):
-                        process_page(page_url)
+                        process_page(page_url, depth)
             else:
                 _run_page_pool(
                     page_threads=page_threads,
@@ -353,9 +362,9 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
 def _run_page_pool(
     *,
     page_threads: int,
-    q_pages: queue.Queue[str],
+    q_pages: queue.Queue[tuple[str, int]],
     claim_page: Callable[[str], bool],
-    process_page: Callable[[str], None],
+    process_page: Callable[[str, int], None],
     max_pages: int,
     seen_pages: set[str],
 ) -> None:
@@ -370,11 +379,11 @@ def _run_page_pool(
         while True:
             while len(seen_pages) < max_pages and len(pending) < page_threads:
                 try:
-                    page_url = q_pages.get_nowait()
+                    page_url, depth = q_pages.get_nowait()
                 except queue.Empty:
                     break
                 if claim_page(page_url):
-                    pending.add(pool.submit(process_page, page_url))
+                    pending.add(pool.submit(process_page, page_url, depth))
             if not pending:
                 break
             _done, pending = wait(pending, return_when=FIRST_COMPLETED)
