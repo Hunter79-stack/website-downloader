@@ -144,6 +144,29 @@ def attachment_site(tmp_path: Path) -> Iterator[tuple[str, Path, bytes]]:
 
 
 @pytest.fixture
+def blacklist_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+    """Site with a forum subsection that a blacklist pattern can exclude."""
+    site = tmp_path / "blacklist-site"
+    (site / "forum").mkdir(parents=True)
+    (site / "index.html").write_text(
+        """
+        <html><body>
+          <a href="/about.html">About</a>
+          <a href="/forum/thread1.html">Forum Thread</a>
+        </body></html>
+        """,
+        encoding="utf-8",
+    )
+    (site / "about.html").write_text("<html><body>About</body></html>", encoding="utf-8")
+    (site / "forum" / "thread1.html").write_text(
+        "<html><body>Forum thread</body></html>", encoding="utf-8"
+    )
+
+    with serve_directory(site) as base_url:
+        yield base_url, site
+
+
+@pytest.fixture
 def conditional_site(tmp_path: Path) -> Iterator[tuple[str, Path]]:
     site = tmp_path / "conditional-site"
     site.mkdir()

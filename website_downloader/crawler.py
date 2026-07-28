@@ -24,6 +24,7 @@ from .urltools import (
     canonical_netloc,
     canonicalize_url,
     is_allowed_external,
+    is_blacklisted,
     is_httpish,
     is_internal,
     is_non_fetchable,
@@ -49,6 +50,7 @@ class CrawlOptions:
     page_threads: int = 1
     download_external_assets: bool = False
     external_domains: set[str] | None = None
+    exclude_patterns: list[str] | None = None
     cookies: dict[str, str] | None = None
     headers: dict[str, str] | None = None
     timeout: int = TIMEOUT
@@ -131,6 +133,9 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
 
     def enqueue_page(url: str) -> None:
         normalized = canonicalize_url(url, start_url)
+        if is_blacklisted(normalized, options.exclude_patterns):
+            log.debug("Excluded page (blacklist match): %s", normalized)
+            return
         with page_lock:
             if normalized not in queued_pages and normalized not in seen_pages:
                 q_pages.put(normalized)

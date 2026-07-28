@@ -202,6 +202,29 @@ Point at a custom sitemap URL or local sitemap file:
 website-downloader --url https://example.com --sitemap https://example.com/sitemap.xml
 ```
 
+Skip parts of a site you don't want mirrored (e.g. a forum bolted onto a site you're archiving):
+
+```bash
+website-downloader ^
+  --url https://example.com ^
+  --destination example_backup ^
+  --exclude "*/forum/*" ^
+  --exclude "*/drafts/*"
+```
+
+Patterns are glob-style (`fnmatch`) and match against both the full URL and the path, so `/forum/*`
+and `*/forum/*` both work. Load a longer list from a file instead of repeating `--exclude`:
+
+```bash
+website-downloader --url https://example.com --exclude-file exclude-patterns.txt
+```
+
+```text
+# exclude-patterns.txt
+*/forum/*
+*/drafts/*
+```
+
 Use safer crawl limits:
 
 ```bash
@@ -269,6 +292,7 @@ If `rich` is not installed, the crawler falls back to normal logging instead of 
 | `--header` | Adds custom request headers. | Bearer tokens, staging headers, API gateway headers. |
 | `--update` | Reuses cache metadata and skips unchanged resources when the server supports it. | Recurring mirrors and archives. |
 | `--sitemap` | Seeds the crawl from `sitemap.xml` or a supplied sitemap. | Faster, more complete discovery. |
+| `--exclude` / `--exclude-file` | Skips pages whose URL matches a glob pattern. | Ignoring forums, drafts, or other sections you don't want mirrored. |
 | `--progress` | Shows a Rich terminal progress dashboard when installed. | Long crawls where visibility matters. |
 | `--zip-output` | Exports the mirror folder as a zip. | Sharing, attaching, or storing snapshots. |
 | `--warc-output` | Writes a simple WARC response archive. | Archival workflows and future replay tooling. |
