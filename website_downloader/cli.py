@@ -56,13 +56,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Recursively mirror a website for offline use.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--url", required=True, help="Starting URL to crawl.")
+    parser.add_argument(
+        "--url",
+        action="append",
+        default=[],
+        help="Starting URL to crawl. Can be repeated for multiple starting points.",
+    )
+    parser.add_argument(
+        "--url-file",
+        default=None,
+        metavar="FILE",
+        help="Read additional starting URLs from a text file, one per line ('#' comments allowed).",
+    )
     parser.add_argument(
         "--destination",
         default=None,
-        help="Output folder. Defaults to a folder derived from the URL.",
+        help="Output folder. Defaults to a folder derived from the first URL.",
     )
     parser.add_argument("--max-pages", type=int, default=50, help="Maximum HTML pages to crawl.")
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=None,
+        help=(
+            "Maximum link depth to follow from each starting URL (0 = only the starting "
+            "URLs themselves). Omit for unlimited depth, bounded only by --max-pages."
+        ),
+    )
     parser.add_argument("--threads", type=int, default=6, help="Concurrent asset download workers.")
     parser.add_argument(
         "--page-threads",
@@ -231,9 +251,32 @@ def load_exclude_patterns(patterns: list[str], pattern_files: list[str]) -> list
     return combined
 
 
+def load_start_urls(urls: list[str], url_file: str | None) -> list[str]:
+    combined = list(urls)
+    if url_file:
+        raw = Path(url_file).expanduser().read_text(encoding="utf-8")
+        for line in raw.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                combined.append(line)
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for url in combined:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+
+    if not deduped:
+        raise ValueError("At least one --url (or --url-file entry) is required")
+    return deduped
+
+
 def validate_args(args: argparse.Namespace) -> None:
     if args.max_pages < 1:
         raise ValueError("--max-pages must be >= 1")
+    if args.max_depth is not None and args.max_depth < 0:
+        raise ValueError("--max-depth must be >= 0")
     if args.threads < 1:
         raise ValueError("--threads must be >= 1")
     if args.page_threads < 1:
@@ -253,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         validate_args(args)
+        start_urls = load_start_urls(args.url, args.url_file)
         cookies = load_cookies(args.cookie, args.cookie_file)
         headers = load_headers(args.header)
         exclude_patterns = load_exclude_patterns(args.exclude, args.exclude_file)
@@ -263,9 +307,11 @@ def main(argv: list[str] | None = None) -> int:
     download_external_assets = args.download_external_assets or args.external_domains is not None
     render_js = args.render_js or args.headless
     options = CrawlOptions(
-        start_url=args.url,
-        root=make_root(args.url, args.destination),
+        start_url=start_urls[0],
+        extra_start_urls=start_urls[1:],
+        root=make_root(start_urls[0], args.destination),
         max_pages=args.max_pages,
+        max_depth=args.max_depth,
         threads=args.threads,
         page_threads=args.page_threads,
         download_external_assets=download_external_assets,

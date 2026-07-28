@@ -187,6 +187,31 @@ website-downloader ^
   --header "X-Environment: staging"
 ```
 
+Mirror several starting points on the same site, following links up to 2 levels deep from each:
+
+```bash
+website-downloader ^
+  --url https://example.com/docs/ ^
+  --url https://example.com/blog/ ^
+  --destination example_backup ^
+  --max-depth 2
+```
+
+`--url` can be repeated, or supplied from a file instead:
+
+```bash
+website-downloader --url-file starting-urls.txt --destination example_backup --max-depth 2
+```
+
+```text
+# starting-urls.txt
+https://example.com/docs/
+https://example.com/blog/
+```
+
+`--max-depth` counts links away from each starting URL (`0` mirrors only the starting URLs
+themselves); omit it for unlimited depth, bounded only by `--max-pages`.
+
 Use a sitemap as the crawl seed:
 
 ```bash
@@ -286,6 +311,8 @@ If `rich` is not installed, the crawler falls back to normal logging instead of 
 
 | Flag | What it does | Best for |
 | --- | --- | --- |
+| `--url` (repeatable) / `--url-file` | Seeds the crawl from multiple starting URLs. | Mirroring several sections of a site in one run. |
+| `--max-depth` | Limits how many link-hops are followed from each starting URL. | Staying focused near your starting points instead of crawling the whole site. |
 | `--page-threads` | Fetches HTML pages concurrently (default 1). | Faster mirroring of large sites that tolerate concurrent requests. |
 | `--render-js` / `--headless` | Uses Playwright before parsing the page. | React, Vue, Angular, Next.js, and other client-rendered sites. |
 | `--cookie-file` | Sends saved browser/session cookies. | Authorized portals, staging sites, docs behind login. |

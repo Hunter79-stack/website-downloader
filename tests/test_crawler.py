@@ -105,6 +105,80 @@ def test_crawl_site_skips_blacklisted_pages(blacklist_site, tmp_path: Path) -> N
     assert not (output / "forum" / "thread1.html").exists()
 
 
+def test_crawl_site_respects_max_depth(depth_chain_site, tmp_path: Path) -> None:
+    base_url, _site = depth_chain_site
+    output = tmp_path / "mirror"
+
+    stats = crawl_site(
+        CrawlOptions(
+            start_url=base_url,
+            root=output,
+            max_pages=10,
+            max_depth=1,
+        )
+    )
+
+    assert stats.pages_seen == 2
+    assert (output / "index.html").exists()
+    assert (output / "level1.html").exists()
+    assert not (output / "level2.html").exists()
+    assert not (output / "level3.html").exists()
+
+
+def test_crawl_site_max_depth_zero_only_fetches_seeds(depth_chain_site, tmp_path: Path) -> None:
+    base_url, _site = depth_chain_site
+    output = tmp_path / "mirror"
+
+    stats = crawl_site(
+        CrawlOptions(
+            start_url=base_url,
+            root=output,
+            max_pages=10,
+            max_depth=0,
+        )
+    )
+
+    assert stats.pages_seen == 1
+    assert (output / "index.html").exists()
+    assert not (output / "level1.html").exists()
+
+
+def test_crawl_site_unlimited_depth_follows_full_chain(depth_chain_site, tmp_path: Path) -> None:
+    base_url, _site = depth_chain_site
+    output = tmp_path / "mirror"
+
+    stats = crawl_site(
+        CrawlOptions(
+            start_url=base_url,
+            root=output,
+            max_pages=10,
+        )
+    )
+
+    assert stats.pages_seen == 4
+    assert (output / "level3.html").exists()
+
+
+def test_crawl_site_extra_start_urls_seed_disconnected_sections(
+    multi_seed_site, tmp_path: Path
+) -> None:
+    base_url, _site = multi_seed_site
+    output = tmp_path / "mirror"
+
+    stats = crawl_site(
+        CrawlOptions(
+            start_url=f"{base_url}docs/",
+            extra_start_urls=[f"{base_url}blog/"],
+            root=output,
+            max_pages=10,
+        )
+    )
+
+    assert stats.pages_seen == 2
+    assert (output / "docs" / "index.html").exists()
+    assert (output / "blog" / "index.html").exists()
+
+
 def test_crawl_site_uses_sitemap_seed(local_site, tmp_path: Path) -> None:
     base_url, _site = local_site
     output = tmp_path / "mirror"
