@@ -267,6 +267,7 @@ def crawl_site(options: CrawlOptions) -> CrawlStats:
                             local_path.parent,
                             options.download_external_assets,
                             options.external_domains,
+                            options.exclude_patterns,
                         )
                         safe_write_text(local_path, str(result.soup), encoding="utf-8")
                         with stats_lock:

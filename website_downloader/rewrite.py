@@ -21,6 +21,7 @@ from .urltools import (
     canonical_netloc,
     canonicalize_url,
     is_allowed_external,
+    is_blacklisted,
     is_httpish,
     is_internal,
     is_non_fetchable,
@@ -189,6 +190,7 @@ def rewrite_links(
     page_dir: Path,
     download_external_assets: bool = False,
     external_domains: set[str] | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> None:
     root_netloc = canonical_netloc(urlparse(page_url))
 
@@ -234,6 +236,12 @@ def rewrite_links(
             is_ext = not is_internal(abs_url, root_netloc)
             treat_as_page = tag.name == "a" and attr == "href"
             rewritten_external_asset = False
+
+            if treat_as_page and not is_ext and is_blacklisted(abs_url, exclude_patterns):
+                # This page was never crawled, so there is no local file to
+                # link to. Point at the live URL instead of a broken local path.
+                tag[attr] = abs_url
+                continue
 
             if is_ext and treat_as_page:
                 continue
