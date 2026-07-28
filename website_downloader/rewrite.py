@@ -14,6 +14,7 @@ from .constants import (
     CSS_URL_RE,
     JS_ABS_URL_RE,
     JS_URL_RE,
+    PAGE_SUFFIXES,
     RESOURCE_LINK_RELS,
 )
 from .paths import cdn_local_path, rel_url, to_local_asset_path, to_local_path
@@ -237,10 +238,23 @@ def rewrite_links(
             treat_as_page = tag.name == "a" and attr == "href"
             rewritten_external_asset = False
 
-            if treat_as_page and not is_ext and is_blacklisted(abs_url, exclude_patterns):
+            # Mirrors the crawler's own page-vs-asset classification, so an
+            # excluded glob that happens to also match a downloaded asset
+            # link (e.g. "*/forum/*" matching "/forum/logo.png") does not
+            # get rewritten away from its local copy.
+            suffix = Path(parsed.path).suffix.lower()
+            crawled_as_page = (
+                treat_as_page
+                and not is_ext
+                and (parsed.path.endswith("/") or suffix in PAGE_SUFFIXES)
+            )
+
+            if crawled_as_page and is_blacklisted(abs_url, exclude_patterns):
                 # This page was never crawled, so there is no local file to
-                # link to. Point at the live URL instead of a broken local path.
-                tag[attr] = abs_url
+                # link to. Point at the live URL instead of a broken local
+                # path, preserving the fragment canonicalize_url stripped.
+                fragment = urlparse(original).fragment
+                tag[attr] = f"{abs_url}#{fragment}" if fragment else abs_url
                 continue
 
             if is_ext and treat_as_page:

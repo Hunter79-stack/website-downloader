@@ -146,5 +146,37 @@ def test_rewrite_links_keeps_absolute_url_for_excluded_pages(tmp_path: Path) -> 
     assert links[1]["href"] == "about.html"
 
 
+def test_rewrite_links_preserves_fragment_for_excluded_pages(tmp_path: Path) -> None:
+    soup = BeautifulSoup('<a href="/forum/thread#reply-3">Reply</a>', "html.parser")
+    rewrite_links(
+        soup,
+        "https://example.com/index.html",
+        tmp_path,
+        tmp_path,
+        download_external_assets=False,
+        exclude_patterns=["*/forum/*"],
+    )
+
+    assert soup.find("a")["href"] == "https://example.com/forum/thread#reply-3"
+
+
+def test_rewrite_links_keeps_local_path_for_downloaded_asset_matching_exclude(
+    tmp_path: Path,
+) -> None:
+    # "*/forum/*" also matches this asset link, but the crawler still
+    # downloads it (only pages are excluded), so the local path must be kept.
+    soup = BeautifulSoup('<a href="/forum/logo.png">Logo</a>', "html.parser")
+    rewrite_links(
+        soup,
+        "https://example.com/index.html",
+        tmp_path,
+        tmp_path,
+        download_external_assets=False,
+        exclude_patterns=["*/forum/*"],
+    )
+
+    assert soup.find("a")["href"] == "forum/logo.png"
+
+
 def test_canonical_netloc_import_keeps_public_api_available() -> None:
     assert canonical_netloc(urlparse("https://EXAMPLE.com:443/a")) == "example.com"
