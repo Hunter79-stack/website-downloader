@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 from urllib.parse import ParseResult, urljoin, urlparse
 
 from .constants import NON_FETCHABLE_SCHEMES
@@ -74,6 +75,20 @@ def is_allowed_external(url: str, allowed_domains: set[str] | None) -> bool:
         return True
     host = (urlparse(url).hostname or "").lower()
     return any(host == domain or host.endswith("." + domain) for domain in allowed_domains)
+
+
+def is_blacklisted(url: str, patterns: list[str] | None) -> bool:
+    """Check a URL against glob patterns (fnmatch syntax, e.g. '*/forum/*').
+
+    Patterns are matched against both the full URL and the path alone, so
+    '/forum/*' and 'https://example.com/forum/*' both work regardless of host.
+    """
+    if not patterns:
+        return False
+    path = urlparse(url).path or "/"
+    return any(
+        fnmatch.fnmatch(url, pattern) or fnmatch.fnmatch(path, pattern) for pattern in patterns
+    )
 
 
 def normalize_external_domains(domains: list[str] | None) -> set[str] | None:

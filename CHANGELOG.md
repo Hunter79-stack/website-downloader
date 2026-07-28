@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `--exclude` / `--exclude-file` skip pages whose URL matches a glob pattern (e.g. `*/forum/*`), so unwanted sections of a site (forums, drafts, etc.) are no longer crawled. ([#55](https://github.com/PKHarsimran/website-downloader/issues/55))
+
 ## v2.6.1 - 2026-07-08
 
 ### Fixed

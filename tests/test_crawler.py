@@ -86,6 +86,25 @@ def test_crawl_downloads_extensionless_attachment_image(attachment_site, tmp_pat
     assert not (output / "attachments" / "228" / "content.html").exists()
 
 
+def test_crawl_site_skips_blacklisted_pages(blacklist_site, tmp_path: Path) -> None:
+    base_url, _site = blacklist_site
+    output = tmp_path / "mirror"
+
+    stats = crawl_site(
+        CrawlOptions(
+            start_url=base_url,
+            root=output,
+            max_pages=10,
+            exclude_patterns=["*/forum/*"],
+        )
+    )
+
+    assert stats.pages_seen == 2
+    assert (output / "index.html").exists()
+    assert (output / "about.html").exists()
+    assert not (output / "forum" / "thread1.html").exists()
+
+
 def test_crawl_site_uses_sitemap_seed(local_site, tmp_path: Path) -> None:
     base_url, _site = local_site
     output = tmp_path / "mirror"

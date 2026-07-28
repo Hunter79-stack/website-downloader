@@ -4,6 +4,7 @@ import pytest
 
 from website_downloader.cli import (
     load_cookies,
+    load_exclude_patterns,
     load_headers,
     parse_args,
     parse_cookie_header,
@@ -56,3 +57,20 @@ def test_load_headers_uses_last_repeated_header() -> None:
 def test_headless_alias_enables_flag() -> None:
     args = parse_args(["--url", "https://example.com", "--headless"])
     assert args.headless is True
+
+
+def test_parse_args_collects_repeated_exclude_patterns() -> None:
+    args = parse_args(
+        ["--url", "https://example.com", "--exclude", "*/forum/*", "--exclude", "*/drafts/*"]
+    )
+    assert args.exclude == ["*/forum/*", "*/drafts/*"]
+
+
+def test_load_exclude_patterns_merges_files_and_cli(tmp_path) -> None:
+    pattern_file = tmp_path / "exclude.txt"
+    pattern_file.write_text("# comment\n*/forum/*\n\n*/drafts/*\n", encoding="utf-8")
+    assert load_exclude_patterns(["*/admin/*"], [str(pattern_file)]) == [
+        "*/admin/*",
+        "*/forum/*",
+        "*/drafts/*",
+    ]

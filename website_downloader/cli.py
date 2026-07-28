@@ -109,6 +109,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--delay", type=float, default=0.0, help="Delay in seconds between page fetches."
     )
     parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Skip pages whose URL matches this glob pattern (e.g. '*/forum/*' or "
+            "'/blog/drafts/*'). Can be repeated."
+        ),
+    )
+    parser.add_argument(
+        "--exclude-file",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="Read exclude glob patterns from a file, one per line ('#' comments allowed).",
+    )
+    parser.add_argument(
         "--max-asset-bytes",
         type=int,
         default=None,
@@ -203,6 +220,17 @@ def load_headers(header_values: list[str]) -> dict[str, str]:
     return headers
 
 
+def load_exclude_patterns(patterns: list[str], pattern_files: list[str]) -> list[str]:
+    combined = list(patterns)
+    for pattern_path in pattern_files:
+        raw = Path(pattern_path).expanduser().read_text(encoding="utf-8")
+        for line in raw.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                combined.append(line)
+    return combined
+
+
 def validate_args(args: argparse.Namespace) -> None:
     if args.max_pages < 1:
         raise ValueError("--max-pages must be >= 1")
@@ -227,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         validate_args(args)
         cookies = load_cookies(args.cookie, args.cookie_file)
         headers = load_headers(args.header)
+        exclude_patterns = load_exclude_patterns(args.exclude, args.exclude_file)
     except (OSError, ValueError) as exc:
         log.error("%s", exc)
         return 2
@@ -241,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         page_threads=args.page_threads,
         download_external_assets=download_external_assets,
         external_domains=normalize_external_domains(args.external_domains),
+        exclude_patterns=exclude_patterns or None,
         cookies=cookies,
         headers=headers,
         delay=args.delay,
